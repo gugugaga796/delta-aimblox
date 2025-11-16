@@ -1,0 +1,186 @@
+-- Delta Aimblox Script
+-- by YourName
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- Конфигурация
+local Settings = {
+    AimEnabled = false,
+    TeamCheck = true,
+    FOV = 60,
+    Smoothness = 0.15,
+    AimKey = Enum.UserInputType.MouseButton2,
+    VisibleCheck = true,
+    FOVCircle = true
+}
+
+-- Создание интерфейса
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local FOVCircle = Instance.new("Frame")
+local StatusLabel = Instance.new("TextLabel")
+
+ScreenGui.Name = "DeltaAimbloxUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+Frame.Name = "MainFrame"
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BorderSizePixel = 0
+Frame.Position = UDim2.new(0, 10, 0, 10)
+Frame.Size = UDim2.new(0, 200, 0, 120)
+
+FOVCircle.Name = "FOVCircle"
+FOVCircle.Parent = ScreenGui
+FOVCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FOVCircle.BorderSizePixel = 0
+FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
+FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.BackgroundTransparency = 0.7
+FOVCircle.Visible = Settings.FOVCircle
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 0)
+corner.Parent = FOVCircle
+
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Parent = Frame
+StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Position = UDim2.new(0, 10, 0, 10)
+StatusLabel.Size = UDim2.new(1, -20, 0, 30)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.Text = "Delta Aimblox - Active"
+StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+StatusLabel.TextSize = 16
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Функции
+function IsVisible(part)
+    if not Settings.VisibleCheck then return true end
+    
+    local character = LocalPlayer.Character
+    if not character then return false end
+    
+    local head = character:FindFirstChild("Head")
+    if not head then return false end
+    
+    local origin = head.Position
+    local target = part.Position
+    local direction = (target - origin).Unit * (origin - target).Magnitude
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {character, part.Parent}
+    
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    return result == nil
+end
+
+function GetClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = Settings.FOV
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                continue
+            end
+            
+            local character = player.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local head = character:FindFirstChild("Head")
+            
+            if humanoid and humanoid.Health > 0 and head then
+                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen and IsVisible(head) then
+                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePos).Magnitude
+                    
+                    if distance < shortestDistance then
+                        closestPlayer = player
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Управление аимом
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Settings.AimKey then
+        Settings.AimEnabled = true
+        StatusLabel.Text = "Delta Aimblox - AIMING"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Settings.AimKey then
+        Settings.AimEnabled = false
+        StatusLabel.Text = "Delta Aimblox - Active"
+        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    end
+end)
+
+-- Автоматический вход
+local function AutoJoin()
+    repeat wait(1)
+        local success = pcall(function()
+            -- Попытка найти арену или точку спавна
+            local spawns = workspace:FindFirstChild("SpawnPoints") or workspace:FindFirstChild("Arena")
+            if spawns then
+                LocalPlayer.Character:MoveTo(spawns.Position + Vector3.new(0, 5, 0))
+            end
+        end)
+    until success
+end
+
+-- Основной цикл
+RunService.RenderStepped:Connect(function()
+    if Settings.AimEnabled then
+        local target = GetClosestPlayer()
+        if target and target.Character then
+            local targetHead = target.Character:FindFirstChild("Head")
+            if targetHead then
+                local currentCFrame = Camera.CFrame
+                local targetPosition = targetHead.Position + Vector3.new(0, 0.2, 0) -- Немного выше головы
+                
+                local newCFrame = CFrame.lookAt(
+                    currentCFrame.Position,
+                    targetPosition
+                )
+                
+                Camera.CFrame = currentCFrame:Lerp(newCFrame, Settings.Smoothness)
+            end
+        end
+    end
+end)
+
+-- Запуск
+spawn(AutoJoin)
+
+-- Уведомление
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Delta Aimblox",
+    Text = "Script loaded successfully!",
+    Duration = 5
+})
+
+print("Delta Aimblox loaded! | FOV: " .. Settings.FOV .. " | Smooth: " .. Settings.Smoothness)
