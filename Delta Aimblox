@@ -1,0 +1,99 @@
+-- Название: Delta Aimblox
+-- Автор: Ваше имя
+-- Версия: 1.0
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Конфигурация
+local Settings = {
+    AimEnabled = false,
+    TeamCheck = true,
+    FOV = 50,
+    Smoothness = 0.2,
+    AimKey = Enum.UserInputType.MouseButton2
+}
+
+-- Функция поиска ближайшего игрока
+function GetClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = Settings.FOV
+    local mousePos = Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                continue
+            end
+            
+            local character = player.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local head = character:FindFirstChild("Head")
+            
+            if humanoid and humanoid.Health > 0 and head then
+                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePos).Magnitude
+                    
+                    if distance < shortestDistance then
+                        closestPlayer = player
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Управление аимом
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Settings.AimKey then
+        Settings.AimEnabled = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Settings.AimKey then
+        Settings.AimEnabled = false
+    end
+end)
+
+-- Основной цикл
+RunService.RenderStepped:Connect(function()
+    if Settings.AimEnabled then
+        local target = GetClosestPlayer()
+        if target and target.Character then
+            local targetHead = target.Character:FindFirstChild("Head")
+            if targetHead then
+                local currentCFrame = Camera.CFrame
+                local targetPosition = targetHead.Position
+                
+                local newCFrame = CFrame.lookAt(
+                    currentCFrame.Position,
+                    targetPosition
+                )
+                
+                Camera.CFrame = currentCFrame:Lerp(newCFrame, Settings.Smoothness)
+            end
+        end
+    end
+end)
+
+-- Уведомление о загрузке
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Delta Aimblox",
+    Text = "Script loaded successfully!",
+    Duration = 5
+})
+
+print("✅ Delta Aimblox loaded!")
